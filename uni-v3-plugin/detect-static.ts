@@ -115,7 +115,6 @@ export default function detectTemplateAssets(
         if (descriptor.script || descriptor.scriptSetup) {
           const script = descriptor.script || descriptor.scriptSetup
           let scriptContent: string = script.content
-
           const importRegex =
             /import\s+(?:(\w+)|{([^}]+)}|\*\s+as\s+(\w+))\s+from\s+['"]([^'"]+)['"]/g
           let match: RegExpExecArray | null
@@ -193,7 +192,6 @@ export default function detectTemplateAssets(
         // 处理 template 部分
         if (descriptor.template) {
           let templateContent = descriptor.template.content
-
           // 处理静态 src
           const staticSrcRegex = /(?<!:)src\s*=\s*["']([^"']+)["']/g
           templateContent = templateContent.replace(
@@ -244,37 +242,57 @@ export default function detectTemplateAssets(
             }
           )
 
-          // 处理 CSS url()
-          const urlRegex = /url\s*\(\s*["']?([^"')]+)["']?\s*\)/g
-          templateContent = templateContent.replace(
-            urlRegex,
-            (match: string, assetPath: string) => {
-              if (isStaticAsset(assetPath)) {
-                const resolvedPath = resolvePath(assetPath, id)
-                detectedAssets.add(resolvedPath)
-                console.log(`📦 检测到CSS资源: ${assetPath} -> ${resolvedPath}`)
-
-                if (enableReplace) {
-                  const replacement = findReplacement(resolvedPath, assetPath)
-                  if (replacement) {
-                    logReplacement('css-url', assetPath, replacement, id)
-                    console.log(
-                      `🔄 替换CSS资源: ${assetPath} -> ${replacement}`
-                    )
-                    return match.replace(assetPath, replacement)
-                  }
-                }
-              }
-              return match
-            }
-          )
-
           if (templateContent !== descriptor.template.content) {
             hasChanges = true
             newCode = newCode.replace(
               descriptor.template.content,
               templateContent
             )
+          }
+        }
+        // style处理
+        if (descriptor.styles && descriptor.styles.length > 0) {
+          for (let i = 0; i < descriptor.styles.length; i++) {
+            const style = descriptor.styles[i]
+            let styleContent = style.content
+
+            // 处理 CSS url()
+            const urlRegex = /url\s*\(\s*["']?([^"')]+)["']?\s*\)/g
+            const newStyleContent = styleContent.replace(
+              urlRegex,
+              (match: string, assetPath: string) => {
+                if (isStaticAsset(assetPath)) {
+                  const resolvedPath = resolvePath(assetPath, id)
+                  detectedAssets.add(resolvedPath)
+                  console.log(
+                    `📦 检测到CSS资源: ${assetPath} -> ${resolvedPath} (style块 ${
+                      i + 1
+                    })`
+                  )
+
+                  if (enableReplace) {
+                    const replacement = findReplacement(resolvedPath, assetPath)
+                    if (replacement) {
+                      logReplacement('css-url', assetPath, replacement, id)
+                      console.log(
+                        `🔄 替换CSS资源: ${assetPath} -> ${replacement} (style块 ${
+                          i + 1
+                        })`
+                      )
+                      return match.replace(assetPath, replacement)
+                    }
+                  }
+                }
+                return match
+              }
+            )
+
+            // 如果内容有变化，替换对应的 style 块
+            if (newStyleContent !== styleContent) {
+              hasChanges = true
+              // 替换整个文件中对应的 style 内容
+              newCode = newCode.replace(style.content, newStyleContent)
+            }
           }
         }
 
