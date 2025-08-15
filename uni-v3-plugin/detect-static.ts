@@ -1,5 +1,6 @@
 import { parse } from '@vue/compiler-sfc'
 import path from 'path'
+import fs from 'fs'
 import type { Plugin } from 'vite'
 
 // 配置项类型
@@ -14,6 +15,8 @@ export interface DetectStaticOptions {
   replacements?: Record<string, ReplacementFn>
   srcRoot?: string
   enableReplace?: boolean
+  excludeUnused?: boolean
+  additionalChecks?: Array<(filePath: string) => boolean>
 }
 
 // 内部结构类型
@@ -37,6 +40,8 @@ export default function detectTemplateAssets(
     enableReplace = false, // 是否启用替换功能
     // 兼容传入多个命名替换函数（将逐个尝试）
     replacements,
+    excludeUnused = true, // 新增选项：是否排除未使用资源
+    additionalChecks = [], // 新增：额外的检查规则
   } = options
 
   const detectedAssets = new Set<string>()
@@ -49,6 +54,7 @@ export default function detectTemplateAssets(
     Array<{ type: string; original: string; replacement: string }>
   >() // 记录替换日志
 
+  const allAssets = new Set<string>()
   // 工具函数
   const isStaticAsset = (assetPath: string): boolean => {
     if (assetPath.startsWith('http') || assetPath.startsWith('data:')) {
@@ -99,13 +105,30 @@ export default function detectTemplateAssets(
     const arr = replacementLog.get(file)
     if (arr) arr.push({ type, original, replacement })
   }
+  // 扫描 src 目录下的所有静态资源
+  const scanDirectory = (dir: string) => {
+    if (!fs.existsSync(dir)) return
 
+    const files = fs.readdirSync(dir, { withFileTypes: true })
+
+    for (const file of files) {
+      const fullPath = path.join(dir, file.name)
+
+      if (file.isDirectory()) {
+        scanDirectory(fullPath)
+      } else {
+        const ext = path.extname(file.name).toLowerCase()
+        if (extensions.includes(ext)) {
+          allAssets.add(fullPath)
+        }
+      }
+    }
+  }
   return {
-    name: 'detect-two',
+    name: 'detect-static',
     enforce: 'pre',
     transform(code, id) {
       if (!id.endsWith('.vue')) return
-
       try {
         const { descriptor } = parse(code)
         let hasChanges = false
@@ -301,20 +324,37 @@ export default function detectTemplateAssets(
         console.warn(`解析 Vue 文件失败: ${id}`, error)
       }
     },
-
-    buildStart() {
+    buildStart(options) {
       console.log('🔍 开始检测模板中的静态资源...')
       detectedAssets.clear()
       importMap.clear()
       replacementLog.clear()
+      // 只扫描资源，不获取使用情况
+      scanDirectory(srcRoot)
     },
 
     buildEnd() {
       console.log('\n📊 检测结果汇总:')
-      console.log(`共检测到 ${detectedAssets.size} 个静态资源:`)
+      console.log(`共扫描到 ${allAssets.size} 个静态资源`)
+      console.log(`共检测到 ${detectedAssets.size} 个已使用资源:`)
+
       detectedAssets.forEach(asset => {
-        console.log(`  - ${asset}`)
+        console.log(`  ✅ ${path.relative(process.cwd(), asset)}`)
       })
+
+      // 显示未使用的资源
+      if (excludeUnused) {
+        const unusedAssets = Array.from(allAssets).filter(
+          asset => !detectedAssets.has(asset)
+        )
+        if (unusedAssets.length > 0) {
+          console.log(`\n⚠️  发现 ${unusedAssets.length} 个未使用的资源:`)
+          unusedAssets.forEach(asset => {
+            console.log(`  ❌ ${path.relative(process.cwd(), asset)}`)
+          })
+          console.log('\n💡 这些资源已被阻止打包，建议手动删除以清理项目')
+        }
+      }
 
       if (enableReplace && replacementLog.size > 0) {
         console.log('\n🔄 替换操作汇总:')
@@ -325,6 +365,42 @@ export default function detectTemplateAssets(
           })
         })
       }
+    },
+    resolveId(id, importer) {
+      const ext = path.extname(id).toLowerCase()
+      if (extensions.includes(ext)) {
+        let resolvedPath = id
+
+        // 解析完整路径
+        if (id.startsWith('@/')) {
+          resolvedPath = path.resolve(srcRoot, id.replace('@/', ''))
+        } else if (id.startsWith('./') || id.startsWith('../')) {
+          resolvedPath = path.resolve(path.dirname(importer || ''), id)
+        }
+
+        resolvedPath = path.normalize(resolvedPath)
+
+        // 如果启用了排除未使用资源功能
+        if (excludeUnused && allAssets.has(resolvedPath)) {
+          // 执行额外的检查规则
+          let isUsedByAdditionalChecks = false
+          additionalChecks.forEach(checkFn => {
+            if (checkFn(resolvedPath)) {
+              detectedAssets.add(resolvedPath)
+              isUsedByAdditionalChecks = true
+            }
+          })
+
+          // 如果资源未被检测到且未通过额外检查，阻止其加载
+          if (!detectedAssets.has(resolvedPath) && !isUsedByAdditionalChecks) {
+            console.log(
+              `🚫 阻止未使用资源: ${path.relative(process.cwd(), resolvedPath)}`
+            )
+            return false // 阻止资源进入打包流程
+          }
+        }
+      }
+      return null
     },
   }
 }
