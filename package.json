@@ -1,0 +1,22 @@
+{
+  "name": "tinyplugins",
+  "version": "0.0.1",
+  "description": "plugin",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qinoho/plugins-uni-vite.git"
+  },
+  "keywords": [
+    "uniapp"
+  ],
+  "author": "qinoho",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/qinoho/plugins-uni-vite/issues"
+  },
+  "homepage": "https://github.com/qinoho/plugins-uni-vite#readme"
+}
