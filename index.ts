@@ -1,5 +1,7 @@
-import detectStatic from './uni-v3-plugin/detect-static.ts'
+import detectStatic from './detect-static'
 
-export {
-  detectStatic
+export function hello(msg: string): string {
+  return `Hello, ${msg}!`
 }
+
+export { detectStatic }
