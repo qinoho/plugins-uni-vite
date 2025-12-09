@@ -4,10 +4,7 @@ import * as fs from 'fs'
 import type { Plugin } from 'vite'
 
 // 配置项类型
-type ReplacementFn = (
-  originalPath: string,
-  resolvedPath: string
-) => string | null | undefined
+type ReplacementFn = (originalPath: string, resolvedPath: string) => string | null | undefined
 export interface DetectStaticOptions {
   extensions?: string[]
   replacementFn?: ReplacementFn
@@ -30,9 +27,7 @@ interface ReplacementLogEntry {
   replacement: string
 }
 
-export default function detectTemplateAssets(
-  options: DetectStaticOptions = {}
-): Plugin {
+export default function detectTemplateAssets(options: DetectStaticOptions = {}): Plugin {
   const {
     extensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'],
     replacementFn,
@@ -45,10 +40,7 @@ export default function detectTemplateAssets(
   } = options
 
   const detectedAssets = new Set<string>()
-  const importMap = new Map<
-    string,
-    { originalPath: string; resolvedPath: string }
-  >()
+  const importMap = new Map<string, { originalPath: string; resolvedPath: string }>()
   const replacementLog = new Map<
     string,
     Array<{ type: string; original: string; replacement: string }>
@@ -81,10 +73,7 @@ export default function detectTemplateAssets(
     return path.resolve(srcRoot, assetPath)
   }
 
-  const findReplacement = (
-    resolvedPath: string,
-    originalPath: string
-  ): string => {
+  const findReplacement = (resolvedPath: string, originalPath: string): string => {
     // 只支持函数式替换
     if (typeof replacementFn === 'function') {
       const result = replacementFn(originalPath, resolvedPath)
@@ -136,21 +125,15 @@ export default function detectTemplateAssets(
         let newCode = code
 
         // 处理 script 部分的 import
-        if (descriptor.script || descriptor.scriptSetup) {
-          const script = descriptor.script || descriptor.scriptSetup
+        const script = descriptor.script || descriptor.scriptSetup
+        if (script) {
           let scriptContent: string = script.content
           const importRegex =
             /import\s+(?:(\w+)|{([^}]+)}|\*\s+as\s+(\w+))\s+from\s+['"]([^'"]+)['"]/g
           let match: RegExpExecArray | null
 
           while ((match = importRegex.exec(scriptContent)) !== null) {
-            const [
-              fullMatch,
-              defaultImport,
-              namedImports,
-              namespaceImport,
-              importPath,
-            ] = match
+            const [fullMatch, defaultImport, namedImports, namespaceImport, importPath] = match
 
             if (isStaticAsset(importPath)) {
               const resolvedPath = resolvePath(importPath, id)
@@ -172,33 +155,15 @@ export default function detectTemplateAssets(
                     if (replacement.startsWith('http')) {
                       // 将 import 转换为变量赋值
                       const newStatement = `const ${defaultImport} = '${replacement}'`
-                      scriptContent = scriptContent.replace(
-                        fullMatch,
-                        newStatement
-                      )
-                      logReplacement(
-                        'import-to-url',
-                        importPath,
-                        replacement,
-                        id
-                      )
-                      console.log(
-                        `🔄 替换导入为URL变量: ${defaultImport} = '${replacement}'`
-                      )
+                      scriptContent = scriptContent.replace(fullMatch, newStatement)
+                      logReplacement('import-to-url', importPath, replacement, id)
+                      console.log(`🔄 替换导入为URL变量: ${defaultImport} = '${replacement}'`)
                     } else {
                       // 普通路径替换
-                      const newImportStatement = fullMatch.replace(
-                        importPath,
-                        replacement
-                      )
-                      scriptContent = scriptContent.replace(
-                        fullMatch,
-                        newImportStatement
-                      )
+                      const newImportStatement = fullMatch.replace(importPath, replacement)
+                      scriptContent = scriptContent.replace(fullMatch, newImportStatement)
                       logReplacement('import', importPath, replacement, id)
-                      console.log(
-                        `🔄 替换导入路径: ${importPath} -> ${replacement}`
-                      )
+                      console.log(`🔄 替换导入路径: ${importPath} -> ${replacement}`)
                     }
                     hasChanges = true
                   }
@@ -224,18 +189,11 @@ export default function detectTemplateAssets(
               if (isStaticAsset(assetPath)) {
                 const resolvedPath = resolvePath(assetPath, id)
                 detectedAssets.add(resolvedPath)
-                console.log(
-                  `📦 检测到静态资源: ${assetPath} -> ${resolvedPath}`
-                )
+                console.log(`📦 检测到静态资源: ${assetPath} -> ${resolvedPath}`)
                 if (enableReplace) {
                   const replacement = findReplacement(resolvedPath, assetPath)
                   if (replacement) {
-                    logReplacement(
-                      'template-static',
-                      assetPath,
-                      replacement,
-                      id
-                    )
+                    logReplacement('template-static', assetPath, replacement, id)
                     console.log(match.replace(assetPath, replacement))
                     return match.replace(assetPath, replacement)
                   }
@@ -254,13 +212,9 @@ export default function detectTemplateAssets(
                 const rec = importMap.get(bindingValue)!
                 const { resolvedPath } = rec
                 detectedAssets.add(resolvedPath)
-                console.log(
-                  `📦 检测到动态绑定资源: ${bindingValue} -> ${resolvedPath}`
-                )
+                console.log(`📦 检测到动态绑定资源: ${bindingValue} -> ${resolvedPath}`)
               } else {
-                console.log(
-                  `⚠️  检测到动态绑定: ${bindingValue} (在 ${id}) - 需要手动检查`
-                )
+                console.log(`⚠️  检测到动态绑定: ${bindingValue} (在 ${id}) - 需要手动检查`)
               }
               return match
             }
@@ -268,10 +222,7 @@ export default function detectTemplateAssets(
 
           if (templateContent !== descriptor.template.content) {
             hasChanges = true
-            newCode = newCode.replace(
-              descriptor.template.content,
-              templateContent
-            )
+            newCode = newCode.replace(descriptor.template.content, templateContent)
           }
         }
         // style处理
@@ -289,9 +240,7 @@ export default function detectTemplateAssets(
                   const resolvedPath = resolvePath(assetPath, id)
                   detectedAssets.add(resolvedPath)
                   console.log(
-                    `📦 检测到CSS资源: ${assetPath} -> ${resolvedPath} (style块 ${
-                      i + 1
-                    })`
+                    `📦 检测到CSS资源: ${assetPath} -> ${resolvedPath} (style块 ${i + 1})`
                   )
 
                   if (enableReplace) {
@@ -299,9 +248,7 @@ export default function detectTemplateAssets(
                     if (replacement) {
                       logReplacement('css-url', assetPath, replacement, id)
                       console.log(
-                        `🔄 替换CSS资源: ${assetPath} -> ${replacement} (style块 ${
-                          i + 1
-                        })`
+                        `🔄 替换CSS资源: ${assetPath} -> ${replacement} (style块 ${i + 1})`
                       )
                       return match.replace(assetPath, replacement)
                     }
@@ -345,9 +292,7 @@ export default function detectTemplateAssets(
 
       // 显示未使用的资源
       if (excludeUnused) {
-        const unusedAssets = Array.from(allAssets).filter(
-          asset => !detectedAssets.has(asset)
-        )
+        const unusedAssets = Array.from(allAssets).filter(asset => !detectedAssets.has(asset))
         if (unusedAssets.length > 0) {
           console.log(`\n⚠️  发现 ${unusedAssets.length} 个未使用的资源:`)
           unusedAssets.forEach(asset => {
@@ -394,9 +339,7 @@ export default function detectTemplateAssets(
 
           // 如果资源未被检测到且未通过额外检查，阻止其加载
           if (!detectedAssets.has(resolvedPath) && !isUsedByAdditionalChecks) {
-            console.log(
-              `🚫 阻止未使用资源: ${path.relative(process.cwd(), resolvedPath)}`
-            )
+            console.log(`🚫 阻止未使用资源: ${path.relative(process.cwd(), resolvedPath)}`)
             return false // 阻止资源进入打包流程
           }
         }
