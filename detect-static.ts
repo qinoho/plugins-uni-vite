@@ -118,7 +118,6 @@ export default function detectTemplateAssets(options: DetectStaticOptions = {}):
     enforce: 'pre',
     transform(code, id) {
       if (!id.endsWith('.vue')) return
-      debugger
       try {
         const { descriptor } = parse(code)
         let hasChanges = false
